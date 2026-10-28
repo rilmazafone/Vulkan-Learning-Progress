@@ -1,13 +1,3 @@
-/*
- * Indexed OBJ model renderer.
- *
- * The default model is copied into assets/models. Pass --model PATH after a
- * direct executable launch to render another OBJ file.
- *
- * Build and run with:
- *   .\build.ps1 -Example 02_triangle run
- *   make EXAMPLE=02_triangle run
- */
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -1686,11 +1676,6 @@ static bool create_swapchain(App *app)
 
 static void destroy_swapchain(App *app)
 {
-    /*
-     * The graphics pipeline refers to this swapchain's render pass. Destroy it
-     * first, then the pipeline layout, before recreating them with the
-     * swapchain.
-     */
     if (app->device != VK_NULL_HANDLE &&
         app->graphics_pipeline != VK_NULL_HANDLE) {
         vkDestroyPipeline(app->device, app->graphics_pipeline, NULL);
@@ -1964,10 +1949,6 @@ static bool render_frame(App *app)
     const VkResult present_result =
         vkQueuePresentKHR(app->present_queue, &present_info);
 
-    /*
-     * One frame is in flight at a time. Waiting here makes it safe to reuse the
-     * same two semaphores and keeps this first window example easy to follow.
-     */
     if (!vk_require(vkQueueWaitIdle(app->present_queue),
                     "vkQueueWaitIdle (present)")) {
         return false;

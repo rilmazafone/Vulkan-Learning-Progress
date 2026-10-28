@@ -1,9 +1,11 @@
-# Vulkan + C
+# Vulkan C Lab
 
 A small C11 project for learning the Vulkan API directly, without a game engine
 or C++ abstraction layer. I am still learning Vulkan, so this repository is
 work in progress and progress will be slow. The code is written for
 understanding first and is not production-ready.
+
+![Vulkan C Lab showcase](Showcase.gif)
 
 ## Examples
 
@@ -79,3 +81,8 @@ keeps a single frame in flight so its synchronization stays easy to follow.
 
 The suggested reading order and next topics are in
 [`docs/learning-path.md`](docs/learning-path.md).
+
+## Attribution
+
+This README was created with AI assistance. The initial project setup was also
+completed with AI assistance because I was not able to set it up myself.

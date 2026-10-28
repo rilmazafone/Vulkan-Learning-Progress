@@ -1087,10 +1087,6 @@ static bool render_frame(App *app)
     const VkResult present_result =
         vkQueuePresentKHR(app->present_queue, &present_info);
 
-    /*
-     * One frame is in flight at a time. Waiting here makes it safe to reuse the
-     * same two semaphores and keeps this first window example easy to follow.
-     */
     if (!vk_require(vkQueueWaitIdle(app->present_queue),
                     "vkQueueWaitIdle (present)")) {
         return false;
