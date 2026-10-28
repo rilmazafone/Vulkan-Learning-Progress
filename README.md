@@ -5,7 +5,7 @@ or C++ abstraction layer. I am still learning Vulkan, so this repository is
 work in progress and progress will be slow. The code is written for
 understanding first and is not production-ready.
 
-![Vulkan C Lab showcase](Showcase.gif)
+![Vulkan C Lab showcase](showcase1.gif)
 
 ## Examples
 
