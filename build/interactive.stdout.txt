@@ -1,0 +1,3 @@
+Vulkan instance and Win32 surface created.
+Validation: enabled
+Using device: AMD Radeon RX 9060 XT

@@ -1,0 +1,1 @@
+vkCreateSwapchainKHR failed with VK_ERROR_DEVICE_LOST (-4)
