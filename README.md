@@ -1,4 +1,4 @@
-# Vulkan C Lab
+# Vulkan + C
 
 A small C11 project for learning the Vulkan API directly, without a game engine
 or C++ abstraction layer. I am still learning Vulkan, so this repository is
