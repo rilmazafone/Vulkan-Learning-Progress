@@ -25,6 +25,9 @@ The second example can render another OBJ model:
 
 - Left/right arrow: orbit the camera
 - Up/down arrow: tilt the camera
+- Mouse wheel: zoom
+- F: toggle wireframe rendering
+- R: reset the camera
 - Escape: close the window
 
 ## Requirements

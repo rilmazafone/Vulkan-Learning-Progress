@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define WINDOW_TITLE "Vulkan C Lab - OBJ Model (Arrows: camera, Escape: close)"
+#define WINDOW_TITLE "Vulkan C Lab - Arrows: orbit, Wheel: zoom, F: wireframe, R: reset"
 #define VALIDATION_LAYER_NAME "VK_LAYER_KHRONOS_validation"
 #define DEFAULT_MODEL_PATH "assets/models/african_head.obj"
 #define MODEL_VERTEX_SHADER_PATH "build/shaders/model.vert.spv"
@@ -24,6 +24,9 @@
 #define CAMERA_ORBIT_SPEED 1.4F
 #define CAMERA_MIN_PITCH (-1.2F)
 #define CAMERA_MAX_PITCH 1.2F
+#define CAMERA_DEFAULT_DISTANCE 3.0F
+#define CAMERA_MIN_DISTANCE 1.5F
+#define CAMERA_MAX_DISTANCE 8.0F
 
 typedef struct App {
     GLFWwindow *window;
@@ -34,8 +37,10 @@ typedef struct App {
     bool camera_right;
     bool camera_up;
     bool camera_down;
+    bool wireframe;
     float camera_yaw;
     float camera_pitch;
+    float camera_distance;
     double camera_last_update_time;
 
     VkInstance instance;
@@ -63,6 +68,7 @@ typedef struct App {
 
     VkPipelineLayout pipeline_layout;
     VkPipeline graphics_pipeline;
+    VkPipeline graphics_pipeline_wireframe;
 
     ObjModel model;
     VkBuffer vertex_buffer;
@@ -155,6 +161,14 @@ static void key_callback(GLFWwindow *window,
         return;
     }
 
+    if (key == GLFW_KEY_F && action == GLFW_PRESS) {
+        app->wireframe = !app->wireframe;
+    } else if (key == GLFW_KEY_R && action == GLFW_PRESS) {
+        app->camera_yaw = 0.0F;
+        app->camera_pitch = 0.0F;
+        app->camera_distance = CAMERA_DEFAULT_DISTANCE;
+    }
+
     const bool pressed = action != GLFW_RELEASE;
     if (key == GLFW_KEY_LEFT) {
         app->camera_left = pressed;
@@ -164,6 +178,24 @@ static void key_callback(GLFWwindow *window,
         app->camera_up = pressed;
     } else if (key == GLFW_KEY_DOWN) {
         app->camera_down = pressed;
+    }
+}
+
+static void scroll_callback(GLFWwindow *window,
+                            double x_offset,
+                            double y_offset)
+{
+    (void)x_offset;
+    App *app = (App *)glfwGetWindowUserPointer(window);
+    if (app == NULL) {
+        return;
+    }
+
+    app->camera_distance -= (float)y_offset * 0.25F;
+    if (app->camera_distance < CAMERA_MIN_DISTANCE) {
+        app->camera_distance = CAMERA_MIN_DISTANCE;
+    } else if (app->camera_distance > CAMERA_MAX_DISTANCE) {
+        app->camera_distance = CAMERA_MAX_DISTANCE;
     }
 }
 
@@ -188,9 +220,11 @@ static bool create_window(App *app)
     }
 
     app->camera_last_update_time = glfwGetTime();
+    app->camera_distance = CAMERA_DEFAULT_DISTANCE;
     glfwSetWindowUserPointer(app->window, app);
     glfwSetFramebufferSizeCallback(app->window, framebuffer_size_callback);
     glfwSetKeyCallback(app->window, key_callback);
+    glfwSetScrollCallback(app->window, scroll_callback);
     return true;
 }
 
@@ -518,6 +552,7 @@ static bool create_logical_device(App *app)
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
     };
     VkPhysicalDeviceFeatures features = {0};
+    features.fillModeNonSolid = VK_TRUE;
 
     VkDeviceCreateInfo device_info = {0};
     device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -1020,7 +1055,10 @@ static void make_model_push_constants(const App *app,
     matrix_rotation_x(view_pitch, -app->camera_pitch);
     matrix_rotation_y(view_yaw, -app->camera_yaw);
     matrix_multiply(view_rotation, view_pitch, view_yaw);
-    matrix_translation(view_translation, 0.0F, 0.0F, -3.0F);
+    matrix_translation(view_translation,
+                       0.0F,
+                       0.0F,
+                       -app->camera_distance);
     matrix_multiply(view, view_translation, view_rotation);
     matrix_perspective(projection,
                        0.78539816339F,
@@ -1154,7 +1192,9 @@ static void destroy_depth_resources(App *app)
     app->depth_image_memory = VK_NULL_HANDLE;
 }
 
-static bool create_graphics_pipeline(App *app)
+static bool create_graphics_pipeline(App *app,
+                                     VkPolygonMode polygon_mode,
+                                     VkPipeline *pipeline)
 {
     VkShaderModule vertex_shader =
         create_shader_module(app, MODEL_VERTEX_SHADER_PATH);
@@ -1171,20 +1211,23 @@ static bool create_graphics_pipeline(App *app)
         return false;
     }
 
-    VkPushConstantRange push_constant = {0};
-    push_constant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    push_constant.offset = 0;
-    push_constant.size = (uint32_t)sizeof(ModelPushConstants);
+    bool success = true;
+    if (app->pipeline_layout == VK_NULL_HANDLE) {
+        VkPushConstantRange push_constant = {0};
+        push_constant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        push_constant.offset = 0;
+        push_constant.size = (uint32_t)sizeof(ModelPushConstants);
 
-    VkPipelineLayoutCreateInfo layout_info = {0};
-    layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    layout_info.pushConstantRangeCount = 1;
-    layout_info.pPushConstantRanges = &push_constant;
-    bool success = vk_require(vkCreatePipelineLayout(app->device,
-                                                     &layout_info,
-                                                     NULL,
-                                                     &app->pipeline_layout),
-                              "vkCreatePipelineLayout");
+        VkPipelineLayoutCreateInfo layout_info = {0};
+        layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        layout_info.pushConstantRangeCount = 1;
+        layout_info.pPushConstantRanges = &push_constant;
+        success = vk_require(vkCreatePipelineLayout(app->device,
+                                                    &layout_info,
+                                                    NULL,
+                                                    &app->pipeline_layout),
+                             "vkCreatePipelineLayout");
+    }
 
     VkPipelineShaderStageCreateInfo stages[2] = {0};
     stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -1236,7 +1279,7 @@ static bool create_graphics_pipeline(App *app)
         VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.polygonMode = polygon_mode;
     rasterizer.cullMode = VK_CULL_MODE_NONE;
     rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
@@ -1306,7 +1349,7 @@ static bool create_graphics_pipeline(App *app)
                                                        1,
                                                        &pipeline_info,
                                                        NULL,
-                                                       &app->graphics_pipeline),
+                                                       pipeline),
                              "vkCreateGraphicsPipelines");
     }
 
@@ -1581,7 +1624,12 @@ static bool create_swapchain(App *app)
 
     if (!create_depth_resources(app) ||
         !create_render_pass(app) ||
-        !create_graphics_pipeline(app)) {
+        !create_graphics_pipeline(app,
+                                  VK_POLYGON_MODE_FILL,
+                                  &app->graphics_pipeline) ||
+        !create_graphics_pipeline(app,
+                                  VK_POLYGON_MODE_LINE,
+                                  &app->graphics_pipeline_wireframe)) {
         return false;
     }
 
@@ -1681,6 +1729,10 @@ static void destroy_swapchain(App *app)
         vkDestroyPipeline(app->device, app->graphics_pipeline, NULL);
     }
     if (app->device != VK_NULL_HANDLE &&
+        app->graphics_pipeline_wireframe != VK_NULL_HANDLE) {
+        vkDestroyPipeline(app->device, app->graphics_pipeline_wireframe, NULL);
+    }
+    if (app->device != VK_NULL_HANDLE &&
         app->pipeline_layout != VK_NULL_HANDLE) {
         vkDestroyPipelineLayout(app->device, app->pipeline_layout, NULL);
     }
@@ -1738,6 +1790,7 @@ static void destroy_swapchain(App *app)
     app->render_pass = VK_NULL_HANDLE;
     app->swapchain = VK_NULL_HANDLE;
     app->graphics_pipeline = VK_NULL_HANDLE;
+    app->graphics_pipeline_wireframe = VK_NULL_HANDLE;
     app->pipeline_layout = VK_NULL_HANDLE;
 }
 
@@ -1826,7 +1879,9 @@ static bool record_model_command(App *app, uint32_t image_index)
 
     vkCmdBindPipeline(command_buffer,
                       VK_PIPELINE_BIND_POINT_GRAPHICS,
-                      app->graphics_pipeline);
+                      app->wireframe
+                          ? app->graphics_pipeline_wireframe
+                          : app->graphics_pipeline);
     const VkDeviceSize vertex_offset = 0;
     vkCmdBindVertexBuffers(command_buffer,
                            0,
